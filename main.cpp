@@ -22,11 +22,13 @@ static int get_signal_data(size_t offset, size_t length, float *out_ptr) {
 
 
 void captureAndProcess() {
-    cv::VideoCapture cap(0); // Open the default camera
-    if (!cap.isOpened()) {   // Check if we succeeded
+    cv::VideoCapture cap(0); // open cam
+    if (!cap.isOpened()) { 
         std::cerr << "ERROR: Could not open camera" << std::endl;
         return;
     }
+
+    cv::namedWindow("Live Detection", cv::WINDOW_AUTOSIZE);
 
     cv::Mat frame;
     signal_t signal;
@@ -35,7 +37,7 @@ void captureAndProcess() {
 
 
     while (true) {
-        cap >> frame; // Capture a new frame
+        cap >> frame; 
         if (frame.empty()) break;
 
         cv::Mat processed;
@@ -59,6 +61,9 @@ void captureAndProcess() {
 
         res = run_classifier(&signal, &result, false);
 
+        float xScale = (float)frame.cols / 160;
+        float yScale = (float)frame.rows / 160;
+
         if (res != EI_IMPULSE_OK) {
             std::cerr << "ERROR: Failed to run classifier" << std::endl;
             return;
@@ -81,9 +86,53 @@ void captureAndProcess() {
                 bb.height);
         }
 
+        // for each bounding box calculate centroid coordinates 
+        // and draw a circle on the frame
+
+        uint32_t xy[EI_CLASSIFIER_OBJECT_DETECTION_COUNT][2]; // [x, y]
+
+        uint32_t num_objects = 0;
+        uint32_t max_x = EI_CLASSIFIER_OBJECT_DETECTION_COUNT;
+
+        for (size_t ix = 0; ix < max_x; ix++) {
+            auto bb = result.bounding_boxes[ix];
+            if (bb.value == 0) {
+                continue;
+            }
+            xy[num_objects][0] = bb.x + bb.width / 2;
+            xy[num_objects][1] = bb.y + bb.height / 2;
+            num_objects++;
+        }
+
+        for (uint32_t i = 0; i < num_objects; i++) {
+            int x = xy[i][0];
+            int y = xy[i][1];
+
+            cv::circle(frame, cv::Point(x, y), 5, cv::Scalar(0, 255, 0), -1);
+        }
+
+        /*
+        for (uint32_t i = 0; i < result.bounding_boxes_count; i++) {
+            ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
+            if (bb.value == 0) {
+                continue;
+            }
+            int x = bb.x + bb.width / 2 * xScale;
+            int y = bb.y + bb.height / 2 * yScale;
+
+            cv::circle(frame, cv::Point(x, y), 5, cv::Scalar(0, 255, 0), -1);
+        }
+        */
+
+        cv::imshow("Live Detection", frame);
+
+        // Wait for a key press for 1 millisecond to see if user wants to exit
+        if (cv::waitKey(1) == 27) break; // Break the loop on pressing 'ESC' 
+
     }
 
     cap.release(); // When everything done, release the video capture object
+    cv::destroyAllWindows(); // Close all OpenCV windows
 }
 
 
