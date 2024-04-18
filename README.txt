@@ -1,7 +1,7 @@
 
-# Edge Impulse library for screwdriver-detection-fomo-320x320
+# Edge Impulse library for fomo-can-detection
 
-This is a C++ library that lets you run the impulse for "screwdriver-detection-fomo-320x320" (http://localhost:4800/studio/379712) on any device. It consists of the Edge Impulse inferencing SDK - with implementations of both processing and learning blocks - and your model. You will need to include this library in your project to run your impulse locally.
+This is a C++ library that lets you run the impulse for "fomo-can-detection" (http://localhost:4800/studio/371335) on any device. It consists of the Edge Impulse inferencing SDK - with implementations of both processing and learning blocks - and your model. You will need to include this library in your project to run your impulse locally.
 
 ## Getting Started
 

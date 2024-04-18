@@ -8,18 +8,18 @@
 #include "edge-impulse-sdk/classifier/ei_run_classifier.h"
 
 
-static const int FEATURE_SIZE = 102400; // feature size for the model
-static float features[FEATURE_SIZE];
+static float features[EI_CLASSIFIER_NN_INPUT_FRAME_SIZE];
 
 // Callback function declaration
 static int get_signal_data(size_t offset, size_t length, float *out_ptr) {
-    if (offset + length > FEATURE_SIZE) return -1; // Handle buffer overflow
-
+    if (offset + length > EI_CLASSIFIER_NN_INPUT_FRAME_SIZE) return -1; // Handle buffer overflow
     for (size_t i = 0; i < length; i++) {
         out_ptr[i] = features[offset + i];
     }
     return EIDSP_OK;
 }
+
+
 
 void captureAndProcess() {
     cv::VideoCapture cap(0); // Open the default camera
@@ -39,15 +39,22 @@ void captureAndProcess() {
         if (frame.empty()) break;
 
         cv::Mat processed;
-        cv::cvtColor(frame, processed, cv::COLOR_BGR2GRAY);
-        cv::resize(processed, processed, cv::Size(FEATURE_SIZE, 1)); 
+        cv::resize(frame, processed, cv::Size(160, 160)); 
 
         // Convert Mat to float array (features)
-        for (int i = 0; i < processed.total(); i++) {
-            features[i] = processed.at<unsigned char>(i);
+        if (processed.isContinuous()) {
+            std::memcpy(features, processed.data, processed.total() * processed.elemSize());
+        } else {
+            // If the matrix is not continuous, we need to copy it row by row
+            auto *p_features = features;
+            for (int i = 0; i < processed.rows; ++i) {
+                std::memcpy(p_features, processed.ptr<float>(i), processed.cols * processed.elemSize());
+                p_features += processed.cols * processed.elemSize() / sizeof(float);
+            }
         }
-
-        signal.total_length = FEATURE_SIZE;
+        //std::cout << "features size: " << sizeof(features) << std::endl; // 409600, seems like this is correct since in c++ returns total number of bytes occupied bty the array in mem
+ 
+        signal.total_length = EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE;
         signal.get_data = &get_signal_data;
 
         res = run_classifier(&signal, &result, false);
@@ -59,13 +66,20 @@ void captureAndProcess() {
 
         std::cout << "Predictions:\n";
 
-        for (uint16_t i = 0; i < EI_CLASSIFIER_LABEL_COUNT; i++) {
-            printf("  %s: ", ei_classifier_inferencing_categories[i]);
-            printf("%.5f\r\n", result.classification[i].value);
+        ei_printf("Object detection bounding boxes:\r\n");
+        for (uint32_t i = 0; i < result.bounding_boxes_count; i++) {
+            ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
+            if (bb.value == 0) {
+                continue;
+            }
+        ei_printf("  %s (%f) [ x: %u, y: %u, width: %u, height: %u ]\r\n",
+                bb.label,
+                bb.value,
+                bb.x,
+                bb.y,
+                bb.width,
+                bb.height);
         }
-
-        std::this_thread::sleep_for(std::chrono::seconds(5)); // Sleep for 5 seconds
-
 
     }
 
