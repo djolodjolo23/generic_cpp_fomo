@@ -10,16 +10,34 @@
 
 static float features[EI_CLASSIFIER_NN_INPUT_FRAME_SIZE];
 
-// Callback function declaration
+void extract_features_from_frame(const cv::Mat& frame) {
+    cv::Mat processed;
+
+   
+    cv::resize(frame, processed, cv::Size(EI_CLASSIFIER_INPUT_WIDTH, EI_CLASSIFIER_INPUT_HEIGHT));
+    
+    cv::cvtColor(processed, processed, cv::COLOR_BGR2RGB);
+
+    if (processed.isContinuous()) {
+        const uint8_t* p = processed.ptr<uint8_t>();
+        for (int i = 0; i < processed.total(); ++i) {
+            //rgb to uint32_t
+            uint32_t red = *p++;
+            uint32_t green = *p++;
+            uint32_t blue = *p++;
+            features[i] = (red << 16) | (green << 8) | blue;
+        }
+    }
+}
+
+// Callback function to provide data to the model
 static int get_signal_data(size_t offset, size_t length, float *out_ptr) {
     if (offset + length > EI_CLASSIFIER_NN_INPUT_FRAME_SIZE) return -1; // Handle buffer overflow
-    for (size_t i = 0; i < length; i++) {
-        out_ptr[i] = features[offset + i];
+    for (size_t i = 0; i < length; ++i) {
+        out_ptr[i] = static_cast<float>(features[offset + i]);
     }
     return EIDSP_OK;
 }
-
-
 
 void captureAndProcess() {
     cv::VideoCapture cap(0); // open cam
@@ -29,6 +47,15 @@ void captureAndProcess() {
     }
 
     cv::namedWindow("Live Detection", cv::WINDOW_AUTOSIZE);
+
+    ei_printf("Starting inferencing in 2 seconds...\r\n");
+    ei_printf("Please point the camera to the object you want to detect\r\n");
+    int width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
+    int height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+
+    ei_printf("Camera resolution: %d x %d\r\n", width, height);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
 
     cv::Mat frame;
     signal_t signal;
@@ -41,29 +68,10 @@ void captureAndProcess() {
         if (frame.empty()) break;
 
         // Calculate scale factors
-        float xScale = frame.cols / 160.0;
-        float yScale = frame.rows / 160.0;
+        float xScale = frame.cols / EI_CLASSIFIER_INPUT_WIDTH;
+        float yScale = frame.rows / EI_CLASSIFIER_INPUT_HEIGHT;
 
-        cv::Mat processed;
-        cv::Rect roi((frame.cols - frame.rows) / 2, 0, frame.rows, frame.rows); // Crop to square from the center
-        cv::Mat cropped = frame(roi);
-
-        // Resize the cropped image
-        cv::resize(cropped, processed, cv::Size(160, 160));
-
-
-        // Convert Mat to float array (features)
-        if (processed.isContinuous()) {
-            std::memcpy(features, processed.data, processed.total() * processed.elemSize());
-        } else {
-            // If the matrix is not continuous, we need to copy it row by row
-            auto *p_features = features;
-            for (int i = 0; i < processed.rows; ++i) {
-                std::memcpy(p_features, processed.ptr<float>(i), processed.cols * processed.elemSize());
-                p_features += processed.cols * processed.elemSize() / sizeof(float);
-            }
-        }
- 
+        extract_features_from_frame(frame);
         signal.total_length = EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE;
         signal.get_data = &get_signal_data;
 
@@ -75,12 +83,13 @@ void captureAndProcess() {
             return;
         }
 
-
-        for (uint32_t i = 0; i < result.bounding_boxes_count; i++) {
+        for (uint32_t i = 0; i < EI_CLASSIFIER_OBJECT_DETECTION_COUNT; i++) {
             ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
-            if (bb.value < 0.85) {
+            if (bb.value == 0) {
                 continue;
             }
+
+            ei_printf("count of bounding boxes: %d\r\n", result.bounding_boxes_count);
 
             int x = bb.x + bb.width / 2;
             int y = bb.y + bb.height / 2;
@@ -105,8 +114,8 @@ void captureAndProcess() {
 
 
             cv::circle(frame, cv::Point(x, y), 5, cv::Scalar(0, 255, 0), -1);
-            ei_printf("Drawing circle at x: %d, y: %d\r\n", x, y);
-            cv::putText(frame, bb.label, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
+            //ei_printf("Drawing circle at x: %d, y: %d\r\n", x, y);
+            //cv::putText(frame, bb.label, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
         }
         
 
