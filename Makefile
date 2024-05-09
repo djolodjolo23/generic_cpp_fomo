@@ -7,7 +7,7 @@ NAME = app
 BUILD_PATH = ./build
 
 # Location of main.cpp (must use C++ compiler for main)
-CXXSOURCES = main.cpp
+CXXSOURCES = video_classifier.cpp
 
 # Search path for header files (current directory)
 CFLAGS += -I.
