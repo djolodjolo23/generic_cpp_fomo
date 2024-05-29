@@ -93,7 +93,6 @@ void runInference(const std::string& videoPath) {
         float xScale = frame.cols / 320.0f;
         float yScale = frame.rows / 320.0f;
 
-
         extract_features_from_frame(frame);
         signal.total_length = EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE;
         signal.get_data = &get_signal_data;
@@ -103,25 +102,21 @@ void runInference(const std::string& videoPath) {
             std::cerr << "ERROR: Failed to run classifier" << std::endl;
             break; 
         }
-
         for (uint32_t i = 0; i < EI_CLASSIFIER_OBJECT_DETECTION_COUNT; i++) {
             ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
             if (bb.value < 0.5f) {
                 continue;
             }
-
             std::string label = "queen";
             std::stringstream ss;
             ss << std::fixed << std::setprecision(2) << bb.value;
             std::string value = ss.str();
-
             int font = cv::FONT_HERSHEY_SIMPLEX;
             double fontScale = 0.5;
             int thickness = 1;
 
-            drawRectangle(frame, bb, xScale, yScale, label, value, font, fontScale, thickness);
-            // Uncomment the next line if you need to draw circles as well
-            //drawCircle(frame, bb, xScale, yScale, label, value, font, fontScale, thickness);
+            drawRectangle(frame, bb, xScale, yScale, label, value, font, fontScale, thickness); // rectangle for classic models
+            //drawCircle(frame, bb, xScale, yScale, label, value, font, fontScale, thickness); // circle for fomo
         }
 
         cv::imshow("Video Detection", frame);
